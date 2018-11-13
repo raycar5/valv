@@ -29,7 +29,7 @@
   "scripts": {
     "lint": "tslint  --project tsconfig.json -t codeFrame 'src/**/*.ts' 'test/**/*.ts'",
     "prebuild": "rimraf dist",
-    "build": "tsc  && typedoc --out docs --target es6 --theme minimal --mode file src",
+    "build": "tsc  && typedoc --tsconfig tsconfig.typedoc.json --out docs --target es6 --theme minimal --mode file src",
     "start": "rollup -c rollup.config.ts -w",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -40,7 +40,8 @@
     "semantic-release": "semantic-release",
     "semantic-release-prepare": "ts-node tools/semantic-release-prepare",
     "precommit": "lint-staged",
-    "checksize": "rollup -c && cat valv.bundled.js | gzip -9 | wc -c && rm valv.bundled.js"
+    "checksize": "rollup -c && cat valv.bundled.js | gzip -9 | wc -c && rm valv.bundled.js",
+    "pack": "npm run build && npm pack ."
   },
   "lint-staged": {
     "{src,test}/**/*.ts": [
@@ -142,7 +143,7 @@
     "tslint": "^5.11.0",
     "tslint-config-prettier": "^1.15.0",
     "tslint-config-standard": "^8.0.1",
-    "typedoc": "^0.12.0",
+    "typedoc": "^0.13.0",
     "typescript": "^3.0.3",
     "web-component-tester": "^6.9.0"
   },
