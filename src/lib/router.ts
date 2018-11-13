@@ -4,6 +4,7 @@ import { Widget, awaito, BlocRepo, ValvContext } from './core';
 
 export class RouterBloc {
   public readonly nextObserver: NextObserver<string>;
+  public readonly replaceObserver: NextObserver<string>;
   public readonly backObserver: NextObserver<any>;
   public readonly routeObservable: Observable<string>;
   public readonly paginationDeltaObserver: NextObserver<number>;
@@ -15,6 +16,13 @@ export class RouterBloc {
     this.nextObserver = {
       next(path) {
         window.history.pushState({}, '', window.location.origin + path);
+        routeSubject.next(path);
+      }
+    };
+
+    this.replaceObserver = {
+      next(path) {
+        window.history.replaceState({}, '', window.location.origin + path);
         routeSubject.next(path);
       }
     };
@@ -105,7 +113,7 @@ export function PaginatedRouteMatcher<T>(context: ValvContext, routes: PageFacto
 export function makeRedirecter(path: string) {
   return Widget(context => {
     const o = defer(() => {
-      context.blocs.of(RouterBloc).nextObserver.next(path);
+      context.blocs.of(RouterBloc).replaceObserver.next(path);
     });
     return html`
       ${awaito(o)}

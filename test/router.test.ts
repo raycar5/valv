@@ -62,6 +62,54 @@ describe('RouterBloc', () => {
     expect(backSpy).toHaveBeenCalledTimes(1);
     expect(observerSpy.mock.calls).toEqual([[initial], [after], [initial]]);
   });
+
+  it('replaces state', async () => {
+    const origin = 'www.foobar.baz';
+    const initial = '/';
+    const intermediate = '/bar';
+    const after = '/foo';
+
+    const history = [initial];
+    const location = {
+      origin,
+      pathname: initial
+    };
+    const newWindow = {
+      history: {
+        pushState(_: any, __: any, path: string) {
+          path = path.replace(origin, '');
+          history.push(path);
+          location.pathname = path;
+        },
+        replaceState(_: any, __: any, path: string) {
+          path = path.replace(origin, '');
+          history.pop();
+          history.push(path);
+          location.pathname = path;
+        },
+        back() {
+          if (history.length > 1) {
+            history.pop();
+            location.pathname = history[history.length - 1]!;
+          } else {
+            expect(true).toBeFalsy(); // Something weird happened
+          }
+        }
+      },
+      location
+    };
+    Object.defineProperty(global, 'window', { value: newWindow, writable: true });
+
+    const router = new RouterBloc();
+
+    router.nextObserver.next(intermediate);
+    expect(window.location.pathname).toBe(intermediate);
+    router.replaceObserver.next(after);
+    expect(window.location.pathname).toBe(after);
+    router.backObserver.next(null);
+    expect(window.location.pathname).toBe(initial);
+  });
+
   it('detects onpopstate', () => {
     const initial = '/';
     const observerSpy = jest.fn();
@@ -241,7 +289,7 @@ describe('makeRedirecter', () => {
     const redirectPath = '/baz';
     const context = new Context();
     context.blocs.register(RouterBloc, {
-      nextObserver: {
+      replaceObserver: {
         next(path: string) {
           expect(path).toEqual(redirectPath);
           done();
