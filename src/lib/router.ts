@@ -1,6 +1,6 @@
 import { NextObserver, Observable, PartialObserver, BehaviorSubject, defer } from 'rxjs';
 import { TemplateResult, html } from 'lit-html';
-import { Widget, awaito, BlocRepo } from './core';
+import { Widget, awaito, BlocRepo, ValvContext } from './core';
 
 export class RouterBloc {
   public readonly nextObserver: NextObserver<string>;
@@ -57,7 +57,7 @@ export interface RouterProps {
   routes?: { [path: string]: TemplateResult };
   notFoundRoute?: TemplateResult;
 }
-export const RouterWidget = Widget((blocs, props?: RouterProps) => {
+export const RouterWidget = Widget((context, props?: RouterProps) => {
   if (!props) {
     throw new Error('Invalid router props');
   }
@@ -92,20 +92,20 @@ export interface PaginatedRouteProps<T> {
 export interface PageFactoryMap<T> {
   [path: string]: Widget<PaginatedRouteProps<T>>;
 }
-export function PaginatedRouteMatcher<T>(blocs: BlocRepo, routes: PageFactoryMap<T>) {
+export function PaginatedRouteMatcher<T>(context: ValvContext, routes: PageFactoryMap<T>) {
   return function(path: string) {
     const r = /((?:\/\w+)+)\/(.*)/;
     const results = r.exec(path);
     if (!results || !results[0]) return undefined;
     const route = routes[results[1]];
     if (!route) return undefined;
-    return route(blocs, { page: parseInt(results[2]) });
+    return route(context, { page: parseInt(results[2]) });
   };
 }
-export function Redirecter(path: string) {
-  return Widget(blocs => {
+export function makeRedirecter(path: string) {
+  return Widget(context => {
     const o = defer(() => {
-      blocs.of(RouterBloc).nextObserver.next(path);
+      context.blocs.of(RouterBloc).nextObserver.next(path);
     });
     return html`
       ${awaito(o)}

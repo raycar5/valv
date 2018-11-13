@@ -1,4 +1,4 @@
-import { eventToObserver, BlocRepo, Widget, awaito, interact } from '../src/lib/core';
+import { eventToObserver, BlocRepo, Widget, awaito, interact, ValvContext } from '../src/lib/core';
 import { html, render } from 'lit-html';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { sleep } from '../src/lib/utils';
@@ -164,7 +164,7 @@ describe('interact', () => {
 
 describe('Widget', () => {
   it('is a noop', () => {
-    function widget(blocs: BlocRepo, props?: number) {
+    function widget(context: ValvContext, props?: number) {
       return html`
         ${props}
       `;

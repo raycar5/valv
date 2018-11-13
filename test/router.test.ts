@@ -7,8 +7,9 @@ import {
   RouterBloc,
   PaginatedRouteMatcher,
   PaginatedRouteProps,
-  Redirecter,
-  RouterWidget
+  makeRedirecter,
+  RouterWidget,
+  Context
 } from '../src/valv';
 import { html, render } from 'lit-html';
 import { widgetRenderedSpy } from '../src/lib/test-utils';
@@ -154,10 +155,10 @@ describe('RouterWidget', () => {
   it('matches using routes map', async () => {
     const path = '/bar/foo';
     const renderedSpy = jest.fn();
-    const blocs = new BlocRepo();
+    const context = new Context();
     render(
-      RouterWidget(blocs, {
-        routes: { [path]: widgetRenderedSpy(renderedSpy)(blocs) },
+      RouterWidget(context, {
+        routes: { [path]: widgetRenderedSpy(renderedSpy)(context) },
         routeObservable: just(path)
       }),
       document.querySelector('body') as Element
@@ -168,10 +169,10 @@ describe('RouterWidget', () => {
   it('matches using matcher', async () => {
     const path = '/bar/foo';
     const renderedSpy = jest.fn();
-    const blocs = new BlocRepo();
+    const context = new Context();
     render(
-      RouterWidget(blocs, {
-        matchers: [matched => widgetRenderedSpy(renderedSpy)(blocs)],
+      RouterWidget(context, {
+        matchers: [matched => widgetRenderedSpy(renderedSpy)(context)],
         routeObservable: just(path)
       }),
       document.querySelector('body') as Element
@@ -181,11 +182,9 @@ describe('RouterWidget', () => {
   });
   it('displays the 404 page when nothing matches', async () => {
     const path = '/bar/foo';
-    const renderedSpy = jest.fn();
-    const blocs = new BlocRepo();
     const body = document.querySelector('body') as Element;
     render(
-      RouterWidget(blocs, {
+      RouterWidget(new Context(), {
         matchers: [matched => undefined],
         routeObservable: just(path),
         notFoundRoute: html`
@@ -198,15 +197,15 @@ describe('RouterWidget', () => {
     expect(body.textContent).toContain('404');
   });
   it('throws if no props are provided', () => {
-    expect(() => RouterWidget(new BlocRepo())).toThrow();
+    expect(() => RouterWidget(new Context())).toThrow();
   });
 });
 
 describe('PaginatedRouteMatcher', () => {
   it('should return the correct route', () => {
     const page = '/foobar/2';
-    const matcher = PaginatedRouteMatcher(new BlocRepo(), {
-      '/foobar': Widget<PaginatedRouteProps<any>>((blocs, props) => {
+    const matcher = PaginatedRouteMatcher(new Context(), {
+      '/foobar': Widget<PaginatedRouteProps<any>>((context, props) => {
         if (props) {
           expect(props.page).toBe(2);
         } else {
@@ -219,8 +218,8 @@ describe('PaginatedRouteMatcher', () => {
   });
   it('should return undefined if the route is not matched', () => {
     const page = '/foobar/2';
-    const matcher = PaginatedRouteMatcher(new BlocRepo(), {
-      '/baz': Widget<PaginatedRouteProps<any>>((blocs, props) => {
+    const matcher = PaginatedRouteMatcher(new Context(), {
+      '/baz': Widget<PaginatedRouteProps<any>>((context, props) => {
         return html``;
       })
     });
@@ -228,8 +227,8 @@ describe('PaginatedRouteMatcher', () => {
   });
   it('should return undefined if the route is not paginated', () => {
     const page = '/baz';
-    const matcher = PaginatedRouteMatcher(new BlocRepo(), {
-      '/baz': Widget<PaginatedRouteProps<any>>((blocs, props) => {
+    const matcher = PaginatedRouteMatcher(new Context(), {
+      '/baz': Widget<PaginatedRouteProps<any>>((context, props) => {
         return html``;
       })
     });
@@ -237,11 +236,11 @@ describe('PaginatedRouteMatcher', () => {
   });
 });
 
-describe('Redirecter', () => {
+describe('makeRedirecter', () => {
   it('should redirect to the page on render', done => {
     const redirectPath = '/baz';
-    const blocs = new BlocRepo();
-    blocs.register(RouterBloc, {
+    const context = new Context();
+    context.blocs.register(RouterBloc, {
       nextObserver: {
         next(path: string) {
           expect(path).toEqual(redirectPath);
@@ -249,6 +248,6 @@ describe('Redirecter', () => {
         }
       }
     });
-    render(Redirecter(redirectPath)(blocs), document.querySelector('body') as Element);
+    render(makeRedirecter(redirectPath)(context), document.querySelector('body') as Element);
   });
 });

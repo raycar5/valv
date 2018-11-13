@@ -3,7 +3,15 @@ import { NextObserver, Observable, of } from 'rxjs';
 import { Mapper, Future } from './utils';
 import { map } from 'rxjs/operators';
 
-export type Widget<T> = (blocs: BlocRepo, props?: T) => TemplateResult;
+export interface ValvContext {
+  blocs: BlocRepo;
+}
+
+export class Context implements ValvContext {
+  public readonly blocs = new BlocRepo();
+}
+
+export type Widget<T> = (context: ValvContext, props?: T) => TemplateResult;
 // Widget is just syntactic sugar so you get types automatically
 export function Widget<T>(widget: Widget<T>) {
   return widget;
