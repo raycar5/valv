@@ -99,7 +99,7 @@ It stands for await observable and it's the main tool that Valv provides, it tak
 It also provides a convinient map function as a second parameter if you want to construct the UI at the call site.
 
 ```typescript
-asynco(
+awaito(
   numberObservable,
   number =>
     html`
