@@ -66,19 +66,17 @@ describe('interact', () => {
     const text = 'foo';
     render(
       html`
-        ${
-          interact(
-            html`
-              <span>${text}</span>
-            `,
-            {
+        <span
+          i="${
+            interact({
               next(e) {
                 expect(e.element.innerHTML).toContain('foo');
                 done();
               }
-            }
-          )
-        }
+            })
+          }"
+          >${text}</span
+        >
       `,
       document.querySelector('body') as Element
     );
@@ -86,20 +84,17 @@ describe('interact', () => {
   it('calls the complete function if no observable is provided', done => {
     render(
       html`
-        ${
-          interact(
-            html`
-              <span></span>
-            `,
-            {
+        <span
+          i="${
+            interact({
               next(e) {},
               complete() {
                 expect(true).toBeTruthy();
                 done();
               }
-            }
-          )
-        }
+            })
+          }"
+        ></span>
       `,
       document.querySelector('body') as Element
     );
@@ -109,20 +104,19 @@ describe('interact', () => {
     const subject = new Subject<string>();
     render(
       html`
-        ${
-          interact(
-            html`
-              <span></span>
-            `,
-            {
-              next({ element, value, index }) {
-                expect(element).toBeInstanceOf(Element);
-                observerSpy(value, index);
-              }
-            },
-            subject
-          )
-        }
+        <span
+          i="${
+            interact(
+              {
+                next({ element, value, index }) {
+                  expect(element).toBeInstanceOf(Element);
+                  observerSpy(value, index);
+                }
+              },
+              subject
+            )
+          }"
+        ></span>
       `,
       document.querySelector('body') as Element
     );
@@ -135,30 +129,6 @@ describe('interact', () => {
     await sleep(0);
 
     expect(observerSpy.mock.calls).toEqual([[text1, 0], [text2, 1]]);
-  });
-  it('yells if you pass in raw text', async () => {
-    const errorSpy = jest.fn();
-    const oldError = console.error;
-    console.error = errorSpy;
-
-    render(
-      html`
-        ${
-          interact(
-            html`
-              Some raw text
-            `,
-            {
-              next(e) {}
-            }
-          )
-        }
-      `,
-      document.querySelector('body') as Element
-    );
-    await sleep(0);
-    expect(errorSpy).toHaveBeenCalled();
-    console.error = oldError;
   });
 });
 

@@ -1,6 +1,6 @@
-import { TemplateResult, NodePart, directive } from 'lit-html';
+import { TemplateResult, NodePart, directive, AttributePart } from 'lit-html';
 import { NextObserver, Observable, of } from 'rxjs';
-import { Mapper, Future } from './utils';
+import { Mapper, Future, sleep } from './utils';
 import { map } from 'rxjs/operators';
 
 export interface ValvContext {
@@ -82,34 +82,18 @@ export const awaito = directive(
   }
 );
 //If no observable is provided, the observer will be called once on element creation
+
 export const interact = directive(
-  <ElementType extends Element, T, E>(
-    value: T,
+  <ElementType extends Element, E>(
     observer: NextObserver<{
       element: ElementType;
       index: number;
       value?: E;
     }>,
     observable?: Observable<E>
-  ) => async (part: NodePart) => {
-    const itemPart = new NodePart(part.options);
-    part.value = value;
-    part.clear();
-    itemPart.appendIntoPart(part);
-    itemPart.setValue(value);
-    itemPart.commit();
-
-    const rawelement = ((itemPart.startNode as unknown) as NonDocumentTypeChildNode)
-      .nextElementSibling;
-
-    if (!rawelement) {
-      console.error(
-        "Don't pass raw text to interact, wrap it in an html element: interact(html`<span>text</span>)`"
-      );
-      return;
-    }
-
-    const element = rawelement as ElementType; // We assume the user doesn't lie to us about the type of the element
+  ) => async (part: AttributePart) => {
+    const element = part.committer.element as ElementType; // We assume the user doesn't lie to us about the type of the element
+    await sleep(0);
     if (!observable) {
       observer.next({ element, index: 0 });
       if (observer.complete) observer.complete();
