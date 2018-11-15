@@ -123,10 +123,13 @@ describe('interact', () => {
 
     const text1 = 'foo';
     const text2 = 'bar';
+
+    await sleep(0); // wait for the listeners to attach
+
     subject.next(text1);
     subject.next(text2);
 
-    await sleep(0);
+    await sleep(0); //wait for the changes to propagate
 
     expect(observerSpy.mock.calls).toEqual([[text1, 0], [text2, 1]]);
   });
