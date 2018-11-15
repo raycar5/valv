@@ -2,7 +2,7 @@
 
 A tiny but powerful web framework built on top of [lit-html](https://github.com/Polymer/lit-html) and [rxjs](https://github.com/ReactiveX/rxjs)
 
-## [Demo](https://valv-hn.firebaseapp.com/top/1)
+## [Demo](https://valv-hn.firebaseapp.com/top/1) ([Source](https://github.com/raycar5/valv-hn))
 
 ## Features
 
