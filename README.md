@@ -110,11 +110,9 @@ awaito(
 
 ## Todo
 
-- Documentation
-- Attribute and Property awaito directives
+- A lot of Documentation
 - SSR
 - PWA facilities
+- more fancy animation stuff
 
 ### Made with [typescript-library-starter](https://github.com/alexjoverm/typescript-library-starter)
-
- 
