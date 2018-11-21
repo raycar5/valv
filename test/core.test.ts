@@ -42,6 +42,25 @@ describe('asynco', () => {
     expect(body.textContent).not.toContain(text1);
     expect(body.textContent).toContain(text2);
   });
+
+  it('can use a mapping function', async () => {
+    const num1 = 23;
+    const num2 = 335;
+    const subject = new Subject<number>();
+    const body = document.querySelector('body') as Element;
+    render(
+      html`
+        ${awaito(subject, n => n + num2)}
+      `,
+      body
+    );
+    await sleep(0);
+    expect(body.textContent).toContain('');
+    subject.next(num1);
+    await sleep(0);
+    expect(body.textContent).toContain(`${num1 + num2}`);
+  });
+
   it('logs when an error is produced in the observable', async () => {
     const errorSpy = jest.fn();
     const error = "I'm an error :D";
@@ -58,6 +77,72 @@ describe('asynco', () => {
     await sleep(0);
     expect(errorSpy).toHaveBeenCalledWith(error);
     console.error = oldError;
+  });
+
+  it('works with attributes', async () => {
+    const s = new Subject();
+    render(
+      html`
+        <div style="${awaito(s)}"></div>
+      `,
+      document.querySelector('body') as Element
+    );
+    const color = 'blue';
+    const style = `color: ${color};`;
+    const divElement = document.querySelector('div') as HTMLDivElement;
+    expect(divElement.style.color).toBe('');
+    s.next(style);
+    await sleep(0);
+    expect(divElement.style.color).toBe(color);
+  });
+
+  it('works with booleans', async () => {
+    const s = new Subject();
+    render(
+      html`
+        <input type="checkbox" ?checked="${awaito(s)}" />
+      `,
+      document.querySelector('body') as Element
+    );
+    const inputElement = document.querySelector('input') as HTMLInputElement;
+    expect(inputElement.checked).toBe(false);
+    s.next(true);
+    await sleep(0);
+    expect(inputElement.checked).toBe(true);
+  });
+
+  it('works with properties', async () => {
+    const s = new Subject();
+    render(
+      html`
+        <div .title="${awaito(s)}"></div>
+      `,
+      document.querySelector('body') as Element
+    );
+    const title = 'hello world';
+    const divElement = document.querySelector('div') as HTMLDivElement;
+    expect(divElement.title).toBe('');
+    s.next(title);
+    await sleep(0);
+    expect(divElement.title).toBe(title);
+  });
+
+  it('works with event listeners', async () => {
+    const s = new Subject();
+    render(
+      html`
+        <div @click="${awaito(s)}"></div>
+      `,
+      document.querySelector('body') as Element
+    );
+    const spy = jest.fn();
+    const divElement = document.querySelector('div') as HTMLDivElement;
+    divElement.click();
+    expect(spy).not.toHaveBeenCalled();
+    s.next(spy);
+    await sleep(0);
+    divElement.click();
+    expect(spy).toHaveBeenCalled();
   });
 });
 

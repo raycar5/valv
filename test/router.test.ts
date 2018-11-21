@@ -9,10 +9,15 @@ import {
   PaginatedRouteProps,
   makeRedirecter,
   RouterWidget,
-  Context
+  Context,
+  InWidgetPaginationProps,
+  InWidgetMatcher,
+  InWidgetPaginationMatcherHelper,
+  awaito
 } from '../src/valv';
 import { html, render } from 'lit-html';
 import { widgetRenderedSpy } from '../src/lib/test-utils';
+import { Subject, Observable, BehaviorSubject } from 'rxjs';
 
 describe('RouterBloc', () => {
   it('captures the current route', async () => {
@@ -201,18 +206,28 @@ describe('RouterBloc', () => {
 
 describe('RouterWidget', () => {
   it('matches using routes map', async () => {
-    const path = '/bar/foo';
-    const renderedSpy = jest.fn();
+    const path1 = '/bar/foo';
+    const path2 = '/foo/bar';
+    const renderedSpy1 = jest.fn();
+    const renderedSpy2 = jest.fn();
     const context = new Context();
+    const s = new Subject<string>();
     render(
       RouterWidget(context, {
-        routes: { [path]: widgetRenderedSpy(renderedSpy)(context) },
-        routeObservable: just(path)
+        routes: {
+          [path1]: widgetRenderedSpy(renderedSpy1)(context),
+          [path2]: () => widgetRenderedSpy(renderedSpy2)(context)
+        },
+        routeObservable: s
       }),
       document.querySelector('body') as Element
     );
-    await sleep(0);
-    expect(renderedSpy).toHaveBeenCalled();
+    s.next(path1);
+    await sleep(2);
+    expect(renderedSpy1).toHaveBeenCalled();
+    s.next(path2);
+    await sleep(2);
+    expect(renderedSpy2).toHaveBeenCalled();
   });
   it('matches using matcher', async () => {
     const path = '/bar/foo';
@@ -225,7 +240,7 @@ describe('RouterWidget', () => {
       }),
       document.querySelector('body') as Element
     );
-    await sleep(0);
+    await sleep(2);
     expect(renderedSpy).toHaveBeenCalled();
   });
   it('displays the 404 page when nothing matches', async () => {
@@ -233,7 +248,7 @@ describe('RouterWidget', () => {
     const body = document.querySelector('body') as Element;
     render(
       RouterWidget(new Context(), {
-        matchers: [matched => undefined],
+        matchers: [path => undefined],
         routeObservable: just(path),
         notFoundRoute: html`
           404
@@ -241,7 +256,7 @@ describe('RouterWidget', () => {
       }),
       body
     );
-    await sleep(0);
+    await sleep(2);
     expect(body.textContent).toContain('404');
   });
   it('throws if no props are provided', () => {
@@ -264,23 +279,139 @@ describe('PaginatedRouteMatcher', () => {
     });
     matcher(page);
   });
-  it('should return undefined if the route is not matched', () => {
+  it('should return the correct route when provided a widget factory', () => {
+    const page = '/foobar/2';
+    const matcher = PaginatedRouteMatcher(new Context(), {
+      '/foobar': () =>
+        Promise.resolve(
+          Widget<PaginatedRouteProps<any>>((context, props) => {
+            if (props) {
+              expect(props.page).toBe(2);
+            } else {
+              expect(true).toBeFalsy();
+            }
+            return html``;
+          })
+        )
+    });
+    matcher(page);
+  });
+  it('should return undefined if the route is not matched', async () => {
     const page = '/foobar/2';
     const matcher = PaginatedRouteMatcher(new Context(), {
       '/baz': Widget<PaginatedRouteProps<any>>((context, props) => {
         return html``;
       })
     });
-    expect(matcher(page)).toBeUndefined();
+    expect(await matcher(page)).toBeUndefined();
   });
-  it('should return undefined if the route is not paginated', () => {
+  it('should return undefined if the route is not paginated', async () => {
     const page = '/baz';
     const matcher = PaginatedRouteMatcher(new Context(), {
       '/baz': Widget<PaginatedRouteProps<any>>((context, props) => {
         return html``;
       })
     });
-    expect(matcher(page)).toBeUndefined();
+    expect(await matcher(page)).toBeUndefined();
+  });
+});
+
+describe('InWidgetMatcher', () => {
+  it('should match correctly when providing a widget factory', async () => {
+    const route = '/foo';
+    const spy = jest.fn();
+    const p1 = `${route}/1`;
+    const p2 = `${route}/2`;
+    const s = new BehaviorSubject<string>(p1);
+    const w = () =>
+      Promise.resolve(
+        Widget<InWidgetPaginationProps>((context, props) => {
+          return html`
+            ${widgetRenderedSpy(spy)(context)}
+            ${
+              awaito(
+                props!.pageObservable,
+                ({ page }) =>
+                  html`
+                    ${page}
+                  `
+              )
+            }
+          `;
+        })
+      );
+    const context = new Context();
+    const body = document.querySelector('body') as HTMLBodyElement;
+    render(
+      html`
+        ${
+          RouterWidget(context, {
+            routeObservable: s,
+            matchers: [InWidgetMatcher(context, InWidgetPaginationMatcherHelper(route), w)]
+          })
+        }
+      `,
+      body
+    );
+    await sleep(2);
+    expect(body.textContent).toContain('1');
+    expect(spy).toHaveBeenCalledTimes(1);
+    s.next(p2);
+    await sleep(2);
+    expect(body.textContent).toContain('2');
+    expect(spy).toHaveBeenCalledTimes(1); // widget only rendered once
+  });
+  it('should match correctly when providing a widget', async () => {
+    const route = '/foo';
+    const spy = jest.fn();
+    const p1 = `${route}/1`;
+    const p2 = `${route}/2`;
+    const s = new BehaviorSubject<string>(p1);
+    const w = Widget<InWidgetPaginationProps>((context, props) => {
+      return html`
+        ${widgetRenderedSpy(spy)(context)}
+        ${
+          awaito(
+            props!.pageObservable,
+            ({ page }) =>
+              html`
+                ${page}
+              `
+          )
+        }
+      `;
+    });
+    const context = new Context();
+    const body = document.querySelector('body') as HTMLBodyElement;
+    render(
+      html`
+        ${
+          RouterWidget(context, {
+            routeObservable: s,
+            matchers: [
+              InWidgetMatcher(context, InWidgetPaginationMatcherHelper(new Set([route])), w)
+            ]
+          })
+        }
+      `,
+      body
+    );
+    await sleep(2);
+    expect(body.textContent).toContain('1');
+    expect(spy).toHaveBeenCalledTimes(1);
+    s.next(p2);
+    await sleep(2);
+    expect(body.textContent).toContain('2');
+    expect(spy).toHaveBeenCalledTimes(1); // widget only rendered once
+  });
+  it('should return undefined if the route is not matched', async () => {
+    const page = '/baz';
+    const matcher = InWidgetMatcher(
+      new Context(),
+      page => (page === '/foo' ? true : undefined),
+      () => html``
+    );
+    expect(await matcher(page, page)).toBeUndefined();
   });
 });
 

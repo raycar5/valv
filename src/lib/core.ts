@@ -1,5 +1,5 @@
-import { TemplateResult, NodePart, directive, AttributePart } from 'lit-html';
-import { NextObserver, Observable, of } from 'rxjs';
+import { TemplateResult, NodePart, directive, AttributePart, Part } from 'lit-html';
+import { NextObserver, Observable } from 'rxjs';
 import { Mapper, Future, sleep } from './utils';
 import { map } from 'rxjs/operators';
 
@@ -12,9 +12,16 @@ export class Context implements ValvContext {
 }
 
 export type Widget<T> = (context: ValvContext, props?: T) => TemplateResult;
+
+const widgetSet = new WeakMap();
 // Widget is just syntactic sugar so you get types automatically
 export function Widget<T>(widget: Widget<T>) {
+  widgetSet.set(widget, true);
   return widget;
+}
+
+export function isWidget(f: Function) {
+  return widgetSet.has(f);
 }
 
 export function eventToObserver<T, E>(
@@ -31,20 +38,20 @@ export function eventToObserver<T, E>(
   };
 }
 
+const awaitoValueMap = new WeakMap();
 export const awaito = directive(
-  <T>(value: Observable<T>, mapper?: Mapper<T, any>) => async (part: NodePart) => {
+  <T>(value: Observable<T>, mapper?: Mapper<T, any>) => async (part: Part) => {
     // If we've already set up this particular observable, we don't need
     // to do anything.
 
     /* istanbul ignore next */
-    if (value === part.value) {
+    if (value === awaitoValueMap.get(part)) {
       return;
     }
 
     // We nest a new part to keep track of previous item values separately
     // of the iterable as a value itself.
-    const itemPart = new NodePart(part.options);
-    part.value = value;
+    awaitoValueMap.set(part, value);
 
     let next = new Future<T>();
     let done = false;
@@ -60,8 +67,13 @@ export const awaito = directive(
       }
     );
     try {
-      part.clear();
-      itemPart.appendIntoPart(part);
+      if (part instanceof NodePart) {
+        const itemPart = new NodePart(part.options);
+        part.value = value;
+        part.clear();
+        itemPart.appendIntoPart(part);
+        part = itemPart;
+      }
       let i = 0;
       while (!done) {
         let v = await next.promise;
@@ -70,8 +82,8 @@ export const awaito = directive(
         if (mapper !== undefined) {
           v = mapper(v, i);
         }
-        itemPart.setValue(v);
-        itemPart.commit();
+        part.setValue(v);
+        part.commit();
         i++;
       }
     } catch (e) {

@@ -1,6 +1,7 @@
-import { NextObserver, Observable, PartialObserver, BehaviorSubject, defer } from 'rxjs';
-import { TemplateResult, html } from 'lit-html';
-import { Widget, awaito, BlocRepo, ValvContext } from './core';
+import { NextObserver, Observable, BehaviorSubject, defer, from } from 'rxjs';
+import { TemplateResult, html, noChange } from 'lit-html';
+import { Widget, awaito, BlocRepo, ValvContext, isWidget } from './core';
+import { switchMap } from 'rxjs/operators';
 
 export class RouterBloc {
   public readonly nextObserver: NextObserver<string>;
@@ -58,11 +59,15 @@ export class RouterBloc {
   }
 }
 
-type PathMatcher = (path: string) => TemplateResult | undefined;
+type TemplateFactory = () => Promise<TemplateResult> | TemplateResult;
+type PathMatcher = (
+  path: string,
+  previousPath: string
+) => TemplateResult | undefined | Promise<TemplateResult | undefined>;
 export interface RouterProps {
   routeObservable: Observable<string>;
   matchers?: Array<PathMatcher>;
-  routes?: { [path: string]: TemplateResult };
+  routes?: { [path: string]: TemplateResult | TemplateFactory };
   notFoundRoute?: TemplateResult;
 }
 export const RouterWidget = Widget((context, props?: RouterProps) => {
@@ -78,36 +83,64 @@ export const RouterWidget = Widget((context, props?: RouterProps) => {
       you should probably pass the notFoundRoute argument to the RouterWidget
     `
   } = props;
+  let previousPath = '';
   return html`
     ${
-      awaito(routeObservable, path => {
-        for (const matcher of matchers) {
-          const template = matcher(path);
-          if (template) return template;
-        }
-        const template = routes[path];
-        if (template) return template;
-        return notFoundRoute;
-      })
+      awaito(
+        routeObservable.pipe(
+          switchMap(path =>
+            from(
+              (async function() {
+                for (const matcher of matchers) {
+                  const template = await matcher(path, previousPath);
+                  if (template) {
+                    previousPath = path;
+                    return template;
+                  }
+                }
+                previousPath = path;
+                const template = routes[path];
+                if (template) {
+                  if (typeof template === 'function') {
+                    return await template();
+                  } else {
+                    return template;
+                  }
+                }
+                return notFoundRoute;
+              })()
+            )
+          )
+        )
+      )
     }
   `;
 });
 
+export type WidgetFactory<T> = () => Widget<T> | Promise<Widget<T>>;
 export interface PaginatedRouteProps<T> {
   page: number;
   metadata?: T;
 }
-export interface PageFactoryMap<T> {
-  [path: string]: Widget<PaginatedRouteProps<T>>;
+export interface PaginationPageFactoryMap<T> {
+  [path: string]: Widget<PaginatedRouteProps<T>> | WidgetFactory<PaginatedRouteProps<T>>;
 }
-export function PaginatedRouteMatcher<T>(context: ValvContext, routes: PageFactoryMap<T>) {
-  return function(path: string) {
-    const r = /((?:\/\w+)+)\/(.*)/;
-    const results = r.exec(path);
+
+export const paginationRegex = /((?:\/\w+)+)\/(.+)/;
+
+export function PaginatedRouteMatcher<T>(
+  context: ValvContext,
+  routes: PaginationPageFactoryMap<T>
+) {
+  return async function(path: string) {
+    const results = paginationRegex.exec(path);
     if (!results || !results[0]) return undefined;
-    const route = routes[results[1]];
+    let route = routes[results[1]];
     if (!route) return undefined;
-    return route(context, { page: parseInt(results[2]) });
+    if (!isWidget(route)) {
+      route = await (route as WidgetFactory<PaginatedRouteProps<T>>)();
+    }
+    return (route as Widget<PaginatedRouteProps<T>>)(context, { page: parseInt(results[2]) });
   };
 }
 export function makeRedirecter(path: string) {
@@ -119,4 +152,47 @@ export function makeRedirecter(path: string) {
       ${awaito(o)}
     `;
   });
+}
+
+export interface InWidgetProps<T> {
+  pageObservable: Observable<T>;
+}
+
+export type InWidgetPaginationProps = InWidgetProps<{ path: string; page: number }>;
+export function InWidgetPaginationMatcherHelper(s: string | Set<string>) {
+  const isString = typeof s == 'string';
+  return (path: string) => {
+    const match = paginationRegex.exec(path);
+    if (
+      match &&
+      ((isString && match[1] === s) || (!isString && (s as Set<string>).has(match[1])))
+    ) {
+      return { path: match[1], page: parseInt(match[2]) };
+    } else {
+      return undefined;
+    }
+  };
+}
+
+export function InWidgetMatcher<T>(
+  context: ValvContext,
+  matcher: (path: string) => T | undefined,
+  widget: Widget<InWidgetProps<T>> | WidgetFactory<InWidgetProps<T>>
+): PathMatcher {
+  let s: BehaviorSubject<T>;
+  return async (path, previousPath) => {
+    const match = matcher(path);
+    if (match === undefined) {
+      return undefined;
+    } else if (matcher(previousPath) === undefined) {
+      s = new BehaviorSubject(match);
+      if (!isWidget(widget)) {
+        widget = await (widget as WidgetFactory<InWidgetProps<T>>)();
+      }
+      return (widget as Widget<InWidgetProps<T>>)(context, { pageObservable: s });
+    } else {
+      s.next(match);
+      return noChange as TemplateResult;
+    }
+  };
 }
