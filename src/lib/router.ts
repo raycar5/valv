@@ -4,56 +4,56 @@ import { Widget, awaito, BlocRepo, ValvContext, isWidget } from './core';
 import { switchMap } from 'rxjs/operators';
 
 export class RouterBloc {
-  public readonly nextObserver: NextObserver<string>;
-  public readonly replaceObserver: NextObserver<string>;
-  public readonly backObserver: NextObserver<any>;
-  public readonly routeObservable: Observable<string>;
-  public readonly paginationDeltaObserver: NextObserver<number>;
+  public readonly $next: NextObserver<string>;
+  public readonly $replace: NextObserver<string>;
+  public readonly $back: NextObserver<any>;
+  public readonly route$: Observable<string>;
+  public readonly $paginationDelta: NextObserver<number>;
   constructor() {
     // Setup
-    const routeSubject = new BehaviorSubject(window.location.pathname);
-    this.routeObservable = routeSubject;
+    const $route$ = new BehaviorSubject(window.location.pathname);
+    this.route$ = $route$;
 
-    this.nextObserver = {
+    this.$next = {
       next(path) {
-        window.history.pushState({}, '', window.location.origin + path);
-        routeSubject.next(path);
+        window.history.pushState({}, '', path);
+        $route$.next(path);
       }
     };
 
-    this.replaceObserver = {
+    this.$replace = {
       next(path) {
-        window.history.replaceState({}, '', window.location.origin + path);
-        routeSubject.next(path);
+        window.history.replaceState({}, '', path);
+        $route$.next(path);
       }
     };
 
-    this.backObserver = {
+    this.$back = {
       next() {
         window.history.back();
-        routeSubject.next(window.location.pathname);
+        $route$.next(window.location.pathname);
       }
     };
 
     window.onpopstate = function(e) {
-      routeSubject.next(window.location.pathname);
+      $route$.next(window.location.pathname);
     };
 
     /**
      * pageDelta = -3;
      * /foo/bar/23 => /foo/bar/(23 + pageDelta) => /foo/bar/20
      */
-    this.paginationDeltaObserver = {
+    this.$paginationDelta = {
       next(pageDelta) {
         const r = /((?:\/\w+)+\/)(?:(\d+))/; // matches path and number (/foo/bar/)(21)
         const match = r.exec(window.location.pathname);
         if (!match || match[1] === undefined || match[2] === undefined) {
-          console.error('called paginationDeltaObserver in a non paginated route');
+          console.error('called $paginationDelta in a non paginated route');
           return;
         }
         const path = match[1] + (parseInt(match[2]) + pageDelta);
-        window.history.pushState({}, path, window.location.origin + path);
-        routeSubject.next(path);
+        window.history.pushState({}, '', path);
+        $route$.next(path);
       }
     };
   }
@@ -65,7 +65,7 @@ type PathMatcher = (
   previousPath: string
 ) => TemplateResult | undefined | Promise<TemplateResult | undefined>;
 export interface RouterProps {
-  routeObservable: Observable<string>;
+  route$: Observable<string>;
   matchers?: Array<PathMatcher>;
   routes?: { [path: string]: TemplateResult | TemplateFactory };
   notFoundRoute?: TemplateResult;
@@ -75,7 +75,7 @@ export const RouterWidget = Widget((context, props?: RouterProps) => {
     throw new Error('Invalid router props');
   }
   const {
-    routeObservable,
+    route$,
     matchers = [],
     routes = {},
     notFoundRoute = html`
@@ -87,7 +87,7 @@ export const RouterWidget = Widget((context, props?: RouterProps) => {
   return html`
     ${
       awaito(
-        routeObservable.pipe(
+        route$.pipe(
           switchMap(path =>
             from(
               (async function() {
@@ -146,7 +146,7 @@ export function PaginatedRouteMatcher<T>(
 export function makeRedirecter(path: string) {
   return Widget(context => {
     const o = defer(() => {
-      context.blocs.of(RouterBloc).replaceObserver.next(path);
+      context.blocs.of(RouterBloc).$replace.next(path);
     });
     return html`
       ${awaito(o)}
@@ -155,7 +155,7 @@ export function makeRedirecter(path: string) {
 }
 
 export interface InWidgetProps<T> {
-  pageObservable: Observable<T>;
+  page$: Observable<T>;
 }
 
 export type InWidgetPaginationProps = InWidgetProps<{ path: string; page: number }>;
@@ -183,13 +183,16 @@ export function InWidgetMatcher<T>(
   return async (path, previousPath) => {
     const match = matcher(path);
     if (match === undefined) {
+      if (matcher(previousPath) !== undefined) {
+        s.complete();
+      }
       return undefined;
     } else if (matcher(previousPath) === undefined) {
       s = new BehaviorSubject(match);
       if (!isWidget(widget)) {
         widget = await (widget as WidgetFactory<InWidgetProps<T>>)();
       }
-      return (widget as Widget<InWidgetProps<T>>)(context, { pageObservable: s });
+      return (widget as Widget<InWidgetProps<T>>)(context, { page$: s });
     } else {
       s.next(match);
       return noChange as TemplateResult;

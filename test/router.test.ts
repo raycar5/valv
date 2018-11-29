@@ -13,7 +13,8 @@ import {
   InWidgetPaginationProps,
   InWidgetMatcher,
   InWidgetPaginationMatcherHelper,
-  awaito
+  awaito,
+  InWidgetProps
 } from '../src/valv';
 import { html, render } from 'lit-html';
 import { widgetRenderedSpy } from '../src/lib/test-utils';
@@ -29,7 +30,7 @@ describe('RouterBloc', () => {
     };
     Object.defineProperty(global, 'window', { value: newWindow, writable: true });
     const router = new RouterBloc();
-    const route = await router.routeObservable.pipe(take(1)).toPromise();
+    const route = await router.route$.pipe(take(1)).toPromise();
     expect(route).toBe(expectedRoute);
   });
 
@@ -55,15 +56,15 @@ describe('RouterBloc', () => {
     Object.defineProperty(global, 'window', { value: newWindow, writable: true });
 
     const router = new RouterBloc();
-    router.routeObservable.subscribe({
+    router.route$.subscribe({
       next: observerSpy
     });
 
     const after = '/foo';
-    router.nextObserver.next(after);
-    expect(pushStateSpy).toHaveBeenCalledWith(origin + after);
+    router.$next.next(after);
+    expect(pushStateSpy).toHaveBeenCalledWith(after);
     expect(observerSpy.mock.calls).toEqual([[initial], [after]]);
-    router.backObserver.next(null);
+    router.$back.next(null);
     expect(backSpy).toHaveBeenCalledTimes(1);
     expect(observerSpy.mock.calls).toEqual([[initial], [after], [initial]]);
   });
@@ -107,11 +108,11 @@ describe('RouterBloc', () => {
 
     const router = new RouterBloc();
 
-    router.nextObserver.next(intermediate);
+    router.$next.next(intermediate);
     expect(window.location.pathname).toBe(intermediate);
-    router.replaceObserver.next(after);
+    router.$replace.next(after);
     expect(window.location.pathname).toBe(after);
-    router.backObserver.next(null);
+    router.$back.next(null);
     expect(window.location.pathname).toBe(initial);
   });
 
@@ -127,7 +128,7 @@ describe('RouterBloc', () => {
     Object.defineProperty(global, 'window', { value: newWindow, writable: true });
 
     const router = new RouterBloc();
-    router.routeObservable.subscribe({ next: observerSpy });
+    router.route$.subscribe({ next: observerSpy });
 
     const after = '/bar';
 
@@ -159,20 +160,20 @@ describe('RouterBloc', () => {
     };
     Object.defineProperty(global, 'window', { value: newWindow, writable: true });
     const router = new RouterBloc();
-    router.routeObservable.subscribe({ next: observerSpy });
+    router.route$.subscribe({ next: observerSpy });
 
     const after = path + 5;
 
-    router.paginationDeltaObserver.next(3);
+    router.$paginationDelta.next(3);
 
     const after2 = path + 3;
 
-    router.paginationDeltaObserver.next(-2);
-    expect(pushStateSpy.mock.calls).toEqual([[origin + after], [origin + after2]]);
+    router.$paginationDelta.next(-2);
+    expect(pushStateSpy.mock.calls).toEqual([[after], [after2]]);
     expect(observerSpy.mock.calls).toEqual([[initial], [after], [after2]]);
   });
 
-  it("doesn't do anything if the current route is not paginated and paginationDeltaObserver is used", () => {
+  it("doesn't do anything if the current route is not paginated and $paginationDelta is used", () => {
     const initial = '/baz';
     const origin = 'foo.bar.baz';
     const observerSpy = jest.fn();
@@ -192,11 +193,11 @@ describe('RouterBloc', () => {
     };
     Object.defineProperty(global, 'window', { value: newWindow, writable: true });
     const router = new RouterBloc();
-    router.routeObservable.subscribe({ next: observerSpy });
+    router.route$.subscribe({ next: observerSpy });
 
     const oldError = console.error;
     console.error = () => {};
-    router.paginationDeltaObserver.next(3);
+    router.$paginationDelta.next(3);
     console.error = oldError;
 
     expect(pushStateSpy).not.toHaveBeenCalled();
@@ -218,7 +219,7 @@ describe('RouterWidget', () => {
           [path1]: widgetRenderedSpy(renderedSpy1)(context),
           [path2]: () => widgetRenderedSpy(renderedSpy2)(context)
         },
-        routeObservable: s
+        route$: s
       }),
       document.querySelector('body') as Element
     );
@@ -236,7 +237,7 @@ describe('RouterWidget', () => {
     render(
       RouterWidget(context, {
         matchers: [matched => widgetRenderedSpy(renderedSpy)(context)],
-        routeObservable: just(path)
+        route$: just(path)
       }),
       document.querySelector('body') as Element
     );
@@ -249,7 +250,7 @@ describe('RouterWidget', () => {
     render(
       RouterWidget(new Context(), {
         matchers: [path => undefined],
-        routeObservable: just(path),
+        route$: just(path),
         notFoundRoute: html`
           404
         `
@@ -330,7 +331,7 @@ describe('InWidgetMatcher', () => {
             ${widgetRenderedSpy(spy)(context)}
             ${
               awaito(
-                props!.pageObservable,
+                props!.page$,
                 ({ page }) =>
                   html`
                     ${page}
@@ -346,7 +347,7 @@ describe('InWidgetMatcher', () => {
       html`
         ${
           RouterWidget(context, {
-            routeObservable: s,
+            route$: s,
             matchers: [InWidgetMatcher(context, InWidgetPaginationMatcherHelper(route), w)]
           })
         }
@@ -372,7 +373,7 @@ describe('InWidgetMatcher', () => {
         ${widgetRenderedSpy(spy)(context)}
         ${
           awaito(
-            props!.pageObservable,
+            props!.page$,
             ({ page }) =>
               html`
                 ${page}
@@ -387,7 +388,7 @@ describe('InWidgetMatcher', () => {
       html`
         ${
           RouterWidget(context, {
-            routeObservable: s,
+            route$: s,
             matchers: [
               InWidgetMatcher(context, InWidgetPaginationMatcherHelper(new Set([route])), w)
             ]
@@ -413,6 +414,22 @@ describe('InWidgetMatcher', () => {
     );
     expect(await matcher(page, page)).toBeUndefined();
   });
+  it('should call complete if it moves away from route', async () => {
+    const page1 = '/foo';
+    const page2 = '/baz';
+    const spy = jest.fn();
+    const matcher = InWidgetMatcher(
+      new Context(),
+      page => (page === page1 ? true : undefined),
+      Widget<InWidgetProps<boolean>>((context, props) => {
+        props!.page$.subscribe({ complete: spy });
+        return html``;
+      })
+    );
+    expect(await matcher(page1, page2)).not.toBeUndefined();
+    expect(await matcher(page2, page1)).toBeUndefined();
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('makeRedirecter', () => {
@@ -420,7 +437,7 @@ describe('makeRedirecter', () => {
     const redirectPath = '/baz';
     const context = new Context();
     context.blocs.register(RouterBloc, {
-      replaceObserver: {
+      $replace: {
         next(path: string) {
           expect(path).toEqual(redirectPath);
           done();

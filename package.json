@@ -1,6 +1,6 @@
 {
   "name": "valv",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Tiny but powerful web framework built with lit-html and rxjs",
   "keywords": [
     "web-framework",

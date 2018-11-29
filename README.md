@@ -14,6 +14,14 @@ A tiny but powerful web framework built on top of [lit-html](https://github.com/
 - Nice api for web animations
 - Tiny (10KB gzipped)
 
+## Naming
+
+Due to the extensive use of rx in this library I've opted for the following naming convention for the frequently used types:
+
+- Observables: observable\$
+- Subjects: \$subject\$
+- Observers: \$observer
+
 ## Guide
 
 Valv is all about controlling the flow of streams, whenever an event happens, it gets put into an observable and the job of the application is to build a pipeline with rxjs that turns that event into a UI update.
