@@ -35,7 +35,7 @@ export class RouterBloc {
       }
     };
 
-    window.onpopstate = function(e) {
+    window.onpopstate = function() {
       $route$.next(window.location.pathname);
     };
 
@@ -85,35 +85,33 @@ export const RouterWidget = Widget((context, props?: RouterProps) => {
   } = props;
   let previousPath = '';
   return html`
-    ${
-      awaito(
-        route$.pipe(
-          switchMap(path =>
-            from(
-              (async function() {
-                for (const matcher of matchers) {
-                  const template = await matcher(path, previousPath);
-                  if (template) {
-                    previousPath = path;
-                    return template;
-                  }
-                }
-                previousPath = path;
-                const template = routes[path];
+    ${awaito(
+      route$.pipe(
+        switchMap(path =>
+          from(
+            (async function() {
+              for (const matcher of matchers) {
+                const template = await matcher(path, previousPath);
                 if (template) {
-                  if (typeof template === 'function') {
-                    return await template();
-                  } else {
-                    return template;
-                  }
+                  previousPath = path;
+                  return template;
                 }
-                return notFoundRoute;
-              })()
-            )
+              }
+              previousPath = path;
+              const template = routes[path];
+              if (template) {
+                if (typeof template === 'function') {
+                  return template();
+                } else {
+                  return template;
+                }
+              }
+              return notFoundRoute;
+            })()
           )
         )
       )
-    }
+    )}
   `;
 });
 
